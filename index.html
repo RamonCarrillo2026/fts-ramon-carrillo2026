@@ -11,6 +11,7 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="icon.svg">
+    <meta name="fts-version" content="supabase-auth-2026-10-03-v2">
     <title>App FTS - Ramón Carrillo</title>
     <style>
         :root {
@@ -844,6 +845,11 @@
             };
         }
 
+        function updateGreeting(){
+            const el=document.getElementById("greeting-title");
+            if(el) el.textContent=currentUser ? `Hola ${currentUser.name||"estudiante"} 👋` : "Hola estudiante 👋";
+        }
+
         async function applySession(session){
             authUser=session?.user || null;
             await loadProfile(authUser);
@@ -919,11 +925,6 @@
                 btn.onclick=openLogin;
             }
             document.querySelectorAll(".admin-only").forEach(el=>el.style.display=isAdmin()?"inline-block":"none");
-        }
-
-        function updateGreeting(){
-            const el=document.getElementById("greeting-title");
-            if(el) el.textContent=currentUser ? `Hola ${currentUser.name||"estudiante"} 👋` : "Hola estudiante 👋";
         }
 
         async function saveProfileCareer(){
@@ -1030,8 +1031,11 @@
     </script>
 
 <script>
+// Limpia versiones antiguas del Service Worker para evitar que GitHub Pages sirva un index viejo.
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(registration => registration.unregister());
+  }).catch(() => {});
 }
 </script>
 
