@@ -152,6 +152,15 @@
         .demand-actions { display:flex; gap:8px; flex-wrap:wrap; }
         .demand-actions button { width:auto; }
 
+        /* MODAL EVENTO PERSONAL */
+        .event-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.58);backdrop-filter:blur(5px);display:none;align-items:center;justify-content:center;z-index:400;padding:18px}
+        .event-modal{width:min(480px,100%);background:var(--bg-light);color:var(--text-light);border-radius:24px;box-shadow:0 24px 70px rgba(0,0,0,.28);overflow:hidden;animation:eventModalIn .18s ease-out}
+        body.dark .event-modal{background:var(--card-dark);color:var(--text-dark)}
+        .event-modal-head{padding:20px 22px 16px;background:linear-gradient(135deg,rgba(242,140,40,.16),rgba(255,179,71,.08));display:flex;align-items:center;justify-content:space-between}
+        .event-modal-head h3{margin:0;font-size:1.2rem}.event-modal-close{border:0;background:rgba(127,127,127,.12);width:36px;height:36px;border-radius:50%;font-size:1.15rem;cursor:pointer;color:inherit}
+        .event-modal-body{padding:20px 22px}.event-field{margin-bottom:14px}.event-field label{display:block;font-weight:700;font-size:.88rem;margin-bottom:6px}.event-field input,.event-field textarea{width:100%;box-sizing:border-box;padding:12px 13px;border:1px solid #c9c9c9;border-radius:12px;background:transparent;color:inherit;font:inherit;outline:none}.event-field input:focus,.event-field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(242,140,40,.12)}.event-modal-actions{display:flex;gap:10px;margin-top:18px}.event-modal-actions button{flex:1;margin:0}.event-cancel{background:#e9ecef!important;color:#333!important}.event-hint{font-size:.78rem;color:#777;margin-top:4px}
+        @keyframes eventModalIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+
         /* LOGIN */
         .auth-bar { display:flex; align-items:center; gap:8px; margin-left:auto; }
         .auth-user { font-size:.85rem; }
@@ -198,6 +207,19 @@
 </head>
 <body class="light">
 
+    <div id="eventModalOverlay" class="event-modal-overlay" onclick="if(event.target===this)closeEventModal()">
+      <div class="event-modal" role="dialog" aria-modal="true" aria-labelledby="eventModalTitle">
+        <div class="event-modal-head"><h3 id="eventModalTitle">📅 Nuevo evento personal</h3><button class="event-modal-close" onclick="closeEventModal()">✕</button></div>
+        <div class="event-modal-body">
+          <div class="event-field"><label for="eventDate">Fecha</label><input id="eventDate" type="date"></div>
+          <div class="event-field"><label for="eventTitle">Título</label><input id="eventTitle" maxlength="80" placeholder="Ej.: Parcial de Teoría Social"></div>
+          <div class="event-field"><label for="eventDescription">Descripción <span style="font-weight:400;color:#777">(opcional)</span></label><textarea id="eventDescription" rows="3" maxlength="240" placeholder="Agregá un detalle si querés..."></textarea></div>
+          <div class="event-hint">Este evento es personal y queda guardado en este navegador.</div>
+          <div class="event-modal-actions"><button class="btn-action event-cancel" onclick="closeEventModal()">Cancelar</button><button class="btn-action" onclick="saveCalendarEvent()">💾 Guardar evento</button></div>
+        </div>
+      </div>
+    </div>
+
     <div id="loginOverlay" class="login-overlay">
       <div class="login-box">
         <h2 id="loginTitle">🔐 Iniciar sesión</h2>
@@ -236,7 +258,7 @@
     <main>
         <!-- INICIO -->
         <div id="inicio" class="section active">
-            <h2>Hola, estudiante 👋</h2>
+            <h2 id="greeting-title">Hola estudiante 👋</h2>
             <div class="card">
                 <span class="badge" style="background: var(--secondary)">HOY</span>
                 <h3>Teoría Social</h3>
@@ -252,6 +274,7 @@
                 <h3>¡Nuevos apuntes subidos!</h3>
                 <p>Ya está disponible el material de la Unidad 3 de Economía Política en la sección biblioteca.</p>
             </div>
+        <div id="homeAlerts"></div>
         <div class="quick-grid">
           <button class="quick-card" onclick="showSection('carrera')">🎓<strong>Mi carrera</strong><small>Materias y progreso</small></button>
           <button class="quick-card" onclick="showSection('estudiemos')">📚<strong>Biblioteca</strong><small>Apuntes y textos</small></button>
@@ -336,16 +359,7 @@
             <div class="card">
                 <h3>➕ Publicar una demanda</h3>
                 <input id="demandTitle" class="calendar-search" placeholder="Título de la demanda">
-                <textarea id="demandDescription" class="calendar-search" rows="4" placeholder="Contá qué está pasando, a quién afecta y qué se solicita..."></textarea>
-                <select id="demandCategory" class="calendar-search">
-                    <option>Académica</option>
-                    <option>Administrativa</option>
-                    <option>Infraestructura</option>
-                    <option>Becas y bienestar</option>
-                    <option>Accesibilidad</option>
-                    <option>Convivencia</option>
-                    <option>Otra</option>
-                </select>
+                <textarea id="demandDescription" class="calendar-search" rows="5" placeholder="Contá qué está pasando y qué se solicita..."></textarea>
                 <button class="btn-action" onclick="publishDemand()">📣 Publicar demanda</button>
             </div>
             <div class="demand-filter">
@@ -385,8 +399,10 @@
       <p>Este panel solo debe estar disponible para la cuenta administradora.</p>
       <div class="stats-grid"><div class="stat-card"><strong id="adminDemandCount">0</strong><span>Demandas</span></div><div class="stat-card"><strong id="adminNewsCount">0</strong><span>Noticias</span></div><div class="stat-card"><strong id="adminFileCount">0</strong><span>Materiales</span></div></div>
       <div class="card"><h3>📣 Gestionar demandas</h3><p>Desde acá podés revisar, marcar como resueltas y eliminar publicaciones.</p><button class="btn-action" onclick="showSection('demandas')">Ir a demandas</button></div>
-      <div class="card"><h3>📰 Publicar noticia</h3><input id="newsTitle" class="calendar-search" placeholder="Título"><textarea id="newsBody" class="calendar-search" rows="4" placeholder="Contenido"></textarea><button class="btn-action" onclick="publishNews()">📰 Publicar</button></div>
-      <div id="adminNewsList"></div>
+      <div class="card admin-section-card"><h3>📰 Publicar noticia</h3><p>Solo vos vas a poder publicar contenido desde este panel.</p><input id="newsTitle" class="calendar-search" placeholder="Título de la noticia"><textarea id="newsBody" class="calendar-search" rows="4" placeholder="Contenido de la noticia"></textarea><button class="btn-action" onclick="publishNews()">📰 Publicar noticia</button></div>
+      <div class="card admin-section-card"><h3>🚨 Publicar alerta</h3><p>Para avisos importantes que quieras mostrar en el inicio.</p><input id="alertTitle" class="calendar-search" placeholder="Título de la alerta"><textarea id="alertBody" class="calendar-search" rows="3" placeholder="Mensaje de la alerta"></textarea><button class="btn-action" style="background:#dc3545" onclick="publishAlert()">🚨 Publicar alerta</button></div>
+      <div class="card admin-section-card"><h3>📚 Agregar texto a la biblioteca</h3><p>Elegí la carrera, año y materia para cargar un enlace a un PDF o material.</p><select id="adminLibraryCareer" class="calendar-search" onchange="populateAdminYears()"></select><select id="adminLibraryYear" class="calendar-search" onchange="populateAdminSubjects()"></select><select id="adminLibrarySubject" class="calendar-search"></select><input id="adminFileTitle" class="calendar-search" placeholder="Nombre del texto"><input id="adminFileUrl" class="calendar-search" placeholder="Link del PDF/archivo"><button class="btn-action" onclick="adminAddLibraryFile()">⬆️ Agregar texto</button></div>
+      <div id="adminNewsList"></div><div id="adminAlertList"></div>
     </div>
 
     <script>
@@ -690,15 +706,17 @@
             box.innerHTML=results.length ? `<div class="card"><h3>Resultados</h3>${results.map(e=>`<p><strong>${e.date.split("-").reverse().join("/")}</strong> — ${escapeHtml(e.title)}</p>`).join("")}</div>` : `<div class="card">No se encontraron eventos para esa búsqueda.</div>`;
         }
         function addCalendarEvent(){
-            const date=prompt("Fecha (AAAA-MM-DD), por ejemplo 2026-08-14:");
-            if(!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
-            const title=prompt("Título del evento:");
-            if(!title) return;
-            const description=prompt("Descripción (opcional):")||"";
-            calendarEvents.push({date,title,description});
-            localStorage.setItem("ftsCalendarEvents",JSON.stringify(calendarEvents));
-            calendarDate=new Date(date+"T12:00:00");
-            renderCalendar(); searchCalendar(); selectCalendarDate(date);
+            const overlay=document.getElementById("eventModalOverlay");
+            document.getElementById("eventDate").value=dateKey(calendarDate.getFullYear(),calendarDate.getMonth(),calendarDate.getDate());
+            document.getElementById("eventTitle").value=""; document.getElementById("eventDescription").value="";
+            overlay.style.display="flex"; setTimeout(()=>document.getElementById("eventTitle").focus(),50);
+        }
+        function closeEventModal(){document.getElementById("eventModalOverlay").style.display="none";}
+        function saveCalendarEvent(){
+            const date=document.getElementById("eventDate").value, title=document.getElementById("eventTitle").value.trim(), description=document.getElementById("eventDescription").value.trim();
+            if(!date||!title)return alert("Completá la fecha y el título.");
+            calendarEvents.push({date,title,description}); localStorage.setItem("ftsCalendarEvents",JSON.stringify(calendarEvents));
+            closeEventModal(); calendarDate=new Date(date+"T12:00:00"); renderCalendar(); searchCalendar(); selectCalendarDate(date);
         }
 
         // ---------------- BIBLIOTECA ----------------
@@ -737,9 +755,7 @@
             const key=`${libraryPath.career}_${libraryPath.subject}`;
             const files=libraryFiles[key]||[];
             box.innerHTML=`<div class="card"><h3>📁 ${escapeHtml(subject?.nombre||"Materia")}</h3>
-                <input id="fileTitle" class="calendar-search" placeholder="Nombre del texto">
-                <input id="fileUrl" class="calendar-search" placeholder="Link del PDF/archivo (opcional)">
-                <button class="btn-action" onclick="addLibraryFile()">⬆️ Subir/agregar texto</button>
+                ${isAdmin()?`<div class="admin-only-library"><p style="color:#777;font-size:.85rem">Como administrador podés agregar materiales desde ⚙️ Administración.</p></div>`:""}
                 <hr style="margin:15px 0">
                 ${files.length?files.map((f,i)=>`<div class="card file-card"><div>📄 <strong>${escapeHtml(f.title)}</strong><br><small>${escapeHtml(f.url||"Archivo guardado como referencia")}</small></div>${f.url?`<a class="btn-action" href="${escapeAttr(f.url)}" target="_blank" rel="noopener">Abrir</a>`:""}</div>`).join(""):"<p>Todavía no hay textos cargados en esta materia.</p>"}</div>`;
         }
@@ -760,20 +776,20 @@
         // ---------------- DEMANDAS ----------------
         let demands=JSON.parse(localStorage.getItem("ftsDemands")||"[]");
         function publishDemand(){
-            const title=document.getElementById("demandTitle").value.trim(), description=document.getElementById("demandDescription").value.trim(), category=document.getElementById("demandCategory").value;
+            const title=document.getElementById("demandTitle").value.trim(), description=document.getElementById("demandDescription").value.trim();
             if(!title||!description)return alert("Completá el título y la descripción.");
-            demands.unshift({id:Date.now(),title,description,category,status:"abierta",date:new Date().toLocaleDateString("es-AR")});
+            demands.unshift({id:Date.now(),title,description,status:"abierta",date:new Date().toLocaleDateString("es-AR")});
             localStorage.setItem("ftsDemands",JSON.stringify(demands));
             document.getElementById("demandTitle").value=""; document.getElementById("demandDescription").value="";
             renderDemands();
         }
         function renderDemands(){
             const q=(document.getElementById("demandSearch").value||"").toLowerCase(), f=document.getElementById("demandFilter").value;
-            const list=demands.filter(d=>(f==="todas"||d.status===f)&&(`${d.title} ${d.description} ${d.category}`).toLowerCase().includes(q));
+            const list=demands.filter(d=>(f==="todas"||d.status===f)&&(`${d.title} ${d.description}`).toLowerCase().includes(q));
             document.getElementById("demandsContainer").innerHTML=list.length?list.map(d=>`<div class="card">
                 <span class="demand-status ${d.status}">${d.status==="resuelta"?"RESUELTA":"ABIERTA"}</span>
                 <h3>${escapeHtml(d.title)}</h3><p>${escapeHtml(d.description)}</p>
-                <div class="demand-meta">Categoría: ${escapeHtml(d.category)} · Publicada: ${escapeHtml(d.date)}</div>
+                <div class="demand-meta">Publicada: ${escapeHtml(d.date)}</div>
                 <div class="demand-actions"><button class="btn-action" onclick="toggleDemand(${d.id})">${d.status==="resuelta"?"Reabrir":"Marcar como resuelta"}</button>
                 <button class="btn-action delete-demand admin-only" data-admin-only="true" onclick="deleteDemand(${d.id})">🗑️ Eliminar</button></div>
             </div>`).join(""):"<div class='card'>No hay demandas que coincidan con la búsqueda.</div>";
@@ -822,7 +838,7 @@
                 if(!u) return alert("Correo o contraseña incorrectos.");
                 currentUser=u; localStorage.setItem("ftsCurrentUser",JSON.stringify(u));
             }
-            closeLogin(); updateAuthUI(); renderDemands();
+            closeLogin(); updateAuthUI(); updateGreeting(); renderDemands();
         }
         function logout(){ currentUser=null; localStorage.removeItem("ftsCurrentUser"); updateAuthUI(); renderDemands(); }
         function updateAuthUI(){
@@ -866,6 +882,38 @@
           document.getElementById("adminDemandCount").textContent=demands.length;
           const total=Object.values(libraryFiles).reduce((a,b)=>a+b.length,0);document.getElementById("adminFileCount").textContent=total;
         }
+        let alerts=JSON.parse(localStorage.getItem("ftsAlerts")||"[]");
+        function publishAlert(){
+          if(!isAdmin()) return alert("Solo el administrador puede publicar alertas.");
+          const title=document.getElementById("alertTitle").value.trim(), body=document.getElementById("alertBody").value.trim();
+          if(!title||!body)return alert("Completá título y mensaje.");
+          alerts.unshift({id:Date.now(),title,body,date:new Date().toLocaleDateString("es-AR")}); localStorage.setItem("ftsAlerts",JSON.stringify(alerts));
+          document.getElementById("alertTitle").value="";document.getElementById("alertBody").value="";renderAlerts();
+        }
+        function deleteAlert(id){if(!isAdmin())return;alerts=alerts.filter(a=>a.id!==id);localStorage.setItem("ftsAlerts",JSON.stringify(alerts));renderAlerts();}
+        function renderAlerts(){
+          const home=document.getElementById("homeAlerts"); if(home) home.innerHTML=alerts.slice(0,3).map(a=>`<div class="card" style="border-left:4px solid #dc3545"><span class="badge" style="background:#dc3545">🚨 ALERTA</span><h3>${escapeHtml(a.title)}</h3><p>${escapeHtml(a.body)}</p><small>${escapeHtml(a.date)}</small></div>`).join("");
+          const list=document.getElementById("adminAlertList"); if(list) list.innerHTML=isAdmin()?alerts.map(a=>`<div class="card"><strong>🚨 ${escapeHtml(a.title)}</strong><button class="btn-action" style="background:#dc3545" onclick="deleteAlert(${a.id})">🗑️ Eliminar</button></div>`).join(""):"";
+        }
+        function populateAdminYears(){
+          const c=document.getElementById("adminLibraryCareer").value, ys=[...new Set((planes[c]||[]).map(m=>m.año))].sort();
+          document.getElementById("adminLibraryYear").innerHTML=ys.map(y=>`<option value="${y}">${y}° año</option>`).join(""); populateAdminSubjects();
+        }
+        function populateAdminSubjects(){
+          const c=document.getElementById("adminLibraryCareer").value,y=Number(document.getElementById("adminLibraryYear").value),subs=getSubjects(c,y);
+          document.getElementById("adminLibrarySubject").innerHTML=subs.map(x=>`<option value="${escapeAttr(x.cod)}">${escapeHtml(x.nombre)}</option>`).join("");
+        }
+        function initAdminLibrary(){
+          const el=document.getElementById("adminLibraryCareer"); if(!el)return; el.innerHTML=Object.keys(planes).map(c=>`<option value="${c}">${careerLabel(c)}</option>`).join(""); populateAdminYears();
+        }
+        function adminAddLibraryFile(){
+          if(!isAdmin())return alert("Solo el administrador puede agregar textos.");
+          const c=document.getElementById("adminLibraryCareer").value,y=Number(document.getElementById("adminLibraryYear").value),cod=document.getElementById("adminLibrarySubject").value,title=document.getElementById("adminFileTitle").value.trim(),url=document.getElementById("adminFileUrl").value.trim();
+          if(!title)return alert("Poné un nombre para el texto.");
+          const key=`${c}_${cod}`; libraryFiles[key]=libraryFiles[key]||[]; libraryFiles[key].push({title,url}); localStorage.setItem("ftsLibraryFiles",JSON.stringify(libraryFiles));
+          document.getElementById("adminFileTitle").value="";document.getElementById("adminFileUrl").value="";renderLibrary();renderNews();alert("Texto agregado a la biblioteca.");
+        }
+
         function updateAdminVisibility(){
           document.querySelectorAll(".admin-only").forEach(el=>el.style.display=isAdmin()?"inline-block":"none");
           if(!isAdmin() && document.getElementById("admin")?.classList.contains("active")) showSection("inicio");
@@ -884,6 +932,8 @@
         renderDemands();
         updateAuthUI();
         updateAdminVisibility();
+        initAdminLibrary();
+        renderAlerts();
         renderProfile();
     </script>
 
