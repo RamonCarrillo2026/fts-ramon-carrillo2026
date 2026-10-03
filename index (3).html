@@ -204,6 +204,7 @@
 
         .quick-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:18px 0}.quick-card{border:1px solid var(--border);background:var(--card-light);color:inherit;border-radius:16px;padding:18px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:5px;font-size:1.4rem}.quick-card strong{font-size:1rem}.quick-card small{font-size:.8rem;color:#777}.announcement-card{margin-top:12px}.secondary-btn{background:var(--secondary)}.profile-card{display:flex;align-items:center;gap:15px}.avatar{width:58px;height:58px;border-radius:50%;background:rgba(242,140,40,.15);display:grid;place-items:center;font-size:1.8rem}.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:15px 0}.stat-card{background:var(--card-light);border-radius:14px;padding:16px;text-align:center;border:1px solid var(--border)}.stat-card strong{display:block;font-size:1.5rem;color:var(--primary)}.stat-card span{font-size:.8rem;color:#777}.admin-section{border-top:3px solid var(--primary)}
     </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="light">
 
@@ -405,7 +406,6 @@
       <div id="adminNewsList"></div><div id="adminAlertList"></div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         // Data estructurada con correlativas oficiales
         // Planes de estudio verificados con documentación de la FTS-UNLP.
@@ -812,37 +812,12 @@
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
         let authMode="login";
+        let authUser=null;
         let currentUser=null;
         let currentProfile=null;
+        const ADMIN_EMAIL="";
 
-        function isAdmin(){ return !!currentProfile?.es_admin; }
-
-        async function loadCurrentProfile(){
-            if(!currentUser){ currentProfile=null; return; }
-            const {data,error}=await supabaseClient.from("profiles").select("*").eq("id",currentUser.id).single();
-            if(error){ console.error("Error cargando perfil:",error); currentProfile=null; return; }
-            currentProfile=data;
-        }
-
-        async function applySession(session){
-            currentUser=session?.user||null;
-            await loadCurrentProfile();
-            updateAuthUI();
-            updateGreeting();
-            renderProfile();
-            renderDemands();
-            updateAdminVisibility();
-        }
-
-        async function initAuth(){
-            const {data,error}=await supabaseClient.auth.getSession();
-            if(error) console.error("Error obteniendo sesión:",error);
-            await applySession(data?.session||null);
-            supabaseClient.auth.onAuthStateChange((_event,session)=>{
-                setTimeout(()=>applySession(session),0);
-            });
-        }
-
+        function isAdmin(){ return !!currentProfile && currentProfile.es_admin === true; }
         function openLogin(){ document.getElementById("loginOverlay").style.display="flex"; }
         function closeLogin(){ document.getElementById("loginOverlay").style.display="none"; }
         function toggleAuthMode(){
@@ -854,70 +829,120 @@
             document.getElementById("authSwitch").textContent=authMode==="login"?"Registrate":"Iniciá sesión";
         }
 
+        async function loadProfile(user){
+            if(!user){ currentProfile=null; currentUser=null; return; }
+            const {data,error}=await supabaseClient.from("profiles").select("*").eq("id",user.id).maybeSingle();
+            if(error){ console.error("Error cargando perfil:",error); }
+            currentProfile=data||null;
+            currentUser={
+                id:user.id,
+                email:user.email||"",
+                name: currentProfile?.nombre || user.user_metadata?.full_name || user.user_metadata?.name || "Estudiante",
+                career: currentProfile?.carrera || "ts",
+                tipo_usuario: currentProfile?.tipo_usuario || "estudiante",
+                es_admin: currentProfile?.es_admin === true
+            };
+        }
+
+        async function applySession(session){
+            authUser=session?.user || null;
+            await loadProfile(authUser);
+            updateAuthUI();
+            updateAdminVisibility();
+            renderProfile();
+            if(document.getElementById("careerSelect") && currentUser?.career) document.getElementById("careerSelect").value=currentUser.career;
+            renderPlan();
+        }
+
+        async function initAuth(){
+            const {data,error}=await supabaseClient.auth.getSession();
+            if(error) console.error("Error obteniendo sesión:",error);
+            await applySession(data?.session || null);
+            supabaseClient.auth.onAuthStateChange((_event,session)=>{
+                setTimeout(()=>applySession(session),0);
+            });
+        }
+
         async function submitAuth(){
             const name=document.getElementById("loginName").value.trim();
             const email=document.getElementById("loginEmail").value.trim().toLowerCase();
             const password=document.getElementById("loginPassword").value;
             if(!email||!password) return alert("Completá correo y contraseña.");
-            if(password.length<6) return alert("La contraseña debe tener al menos 6 caracteres.");
+            if(password.length < 6) return alert("La contraseña debe tener al menos 6 caracteres.");
 
-            const button=document.getElementById("loginSubmit");
-            button.disabled=true;
-            try{
+            const submit=document.getElementById("loginSubmit");
+            submit.disabled=true;
+            try {
                 if(authMode==="register"){
                     if(!name) return alert("Poné tu nombre.");
                     const {data,error}=await supabaseClient.auth.signUp({
-                        email,password,
-                        options:{data:{full_name:name}}
+                        email,
+                        password,
+                        options:{data:{full_name:name,name:name}}
                     });
                     if(error) throw error;
-                    if(!data.session){
-                        alert("Cuenta creada. Revisá tu correo para confirmar la cuenta y después iniciá sesión.");
-                    }else{
-                        alert("Cuenta creada correctamente.");
+                    if(data?.user && !data.session){
+                        closeLogin();
+                        alert("Cuenta creada correctamente. Revisá tu correo para confirmar la cuenta y después iniciá sesión.");
+                    } else {
+                        closeLogin();
+                        await applySession(data.session);
                     }
-                }else{
-                    const {error}=await supabaseClient.auth.signInWithPassword({email,password});
+                } else {
+                    const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
                     if(error) throw error;
+                    await applySession(data.session);
+                    closeLogin();
                 }
-                closeLogin();
-                document.getElementById("loginPassword").value="";
-            }catch(error){
+            } catch(error){
                 console.error(error);
-                alert("No se pudo completar la operación: "+(error.message||"Error desconocido"));
-            }finally{
-                button.disabled=false;
+                alert(error?.message || "No se pudo completar la operación.");
+            } finally {
+                submit.disabled=false;
             }
-        }
-
-        async function loginWithGoogle(){
-            const {error}=await supabaseClient.auth.signInWithOAuth({
-                provider:"google",
-                options:{redirectTo:window.location.href}
-            });
-            if(error) alert("No se pudo iniciar con Google: "+error.message);
         }
 
         async function logout(){
             const {error}=await supabaseClient.auth.signOut();
-            if(error) return alert("No se pudo cerrar sesión: "+error.message);
-            currentUser=null; currentProfile=null;
-            updateAuthUI(); renderProfile(); renderDemands(); updateAdminVisibility();
+            if(error) alert(error.message);
         }
 
         function updateAuthUI(){
             const label=document.getElementById("authUser"), btn=document.getElementById("authButton");
             if(currentUser){
-                const name=currentProfile?.nombre || currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Usuario";
-                label.textContent=(isAdmin()?"👑 ":"👤 ")+name;
+                label.textContent=(isAdmin()?"👑 ":"👤 ")+(currentUser.name||"Estudiante");
                 btn.textContent="Cerrar sesión";
                 btn.onclick=logout;
-            }else{
+            } else {
                 label.textContent="No iniciado";
                 btn.textContent="🔐 Iniciar sesión";
                 btn.onclick=openLogin;
             }
             document.querySelectorAll(".admin-only").forEach(el=>el.style.display=isAdmin()?"inline-block":"none");
+        }
+
+        function updateGreeting(){
+            const el=document.getElementById("greeting-title");
+            if(el) el.textContent=currentUser ? `Hola ${currentUser.name||"estudiante"} 👋` : "Hola estudiante 👋";
+        }
+
+        async function saveProfileCareer(){
+            if(!authUser) return alert("Iniciá sesión primero.");
+            const carrera=document.getElementById("profileCareer").value;
+            const {data,error}=await supabaseClient.from("profiles").update({carrera}).eq("id",authUser.id).select().single();
+            if(error) return alert("No se pudo guardar la carrera: "+error.message);
+            currentProfile=data;
+            currentUser.career=carrera;
+            document.getElementById("careerSelect").value=carrera;
+            renderPlan();
+            alert("Carrera guardada.");
+        }
+
+        async function refreshCurrentProfile(){
+            if(authUser) await loadProfile(authUser);
+            updateAuthUI();
+            updateGreeting();
+            renderProfile();
         }
 
         function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));}
@@ -926,14 +951,6 @@
 
         // ---------------- PERFIL / NOTICIAS / ADMIN ----------------
         let news=JSON.parse(localStorage.getItem("ftsNews")||"[]");
-        async function saveProfileCareer(){
-          if(!currentUser) return alert("Iniciá sesión primero.");
-          const career=document.getElementById("profileCareer").value;
-          const {data,error}=await supabaseClient.from("profiles").update({carrera:career}).eq("id",currentUser.id).select().single();
-          if(error) return alert("No se pudo guardar la carrera: "+error.message);
-          currentProfile=data;
-          document.getElementById("careerSelect").value=career; renderPlan(); renderProfile(); alert("Carrera guardada.");
-        }
         function renderProfile(){
           const n=document.getElementById("profileName"),e=document.getElementById("profileEmail"),a=document.getElementById("profileAvatar"),c=document.getElementById("profileCareer");
           if(currentUser){n.textContent=currentUser.name||"Estudiante";e.textContent=currentUser.email;a.textContent=(currentUser.name||"E").charAt(0).toUpperCase();c.value=currentUser.career||"ts";}
@@ -1005,10 +1022,11 @@
         renderDemands();
         updateAuthUI();
         updateAdminVisibility();
+        updateGreeting();
+        initAuth();
         initAdminLibrary();
         renderAlerts();
         renderProfile();
-        initAuth();
     </script>
 
 <script>
